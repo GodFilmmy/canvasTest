@@ -7,13 +7,18 @@ const App = () => {
   const canvasRef = useRef({});
   const [textColor, setTextColor] = useState("#000000");
   const [canvasTitle, setCanvasTitle] = useState("");
-  const [fontStyle, setFontStyle] = useState({ bold: false, italic: false, underline: false });
+  const [fontStyle, setFontStyle] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+  });
 
   // Create a new canvas
   const createCanvas = () => {
-    if (!canvasTitle.trim()) return alert("Please enter a title for the canvas.");
+    if (!canvasTitle.trim())
+      return alert("Please enter a title for the canvas.");
     const id = Date.now().toString();
-    const newCanvas = { id, title: canvasTitle, json: null };
+    const newCanvas = { id, title: canvasTitle, json: null, thumbnail: null };
     setCanvases((prev) => [...prev, newCanvas]);
     setSelectedCanvas(newCanvas);
     setCanvasTitle("");
@@ -23,7 +28,7 @@ const App = () => {
   useEffect(() => {
     if (!selectedCanvas) return;
     const { id } = selectedCanvas;
-
+  
     const newCanvas = new fabric.Canvas(`canvas-${id}`, {
       width: 800,
       height: 500,
@@ -31,18 +36,18 @@ const App = () => {
       selection: true,
       preserveObjectStacking: true,
     });
-
+  
     canvasRef.current[id] = newCanvas;
-
+  
     if (selectedCanvas.json) {
       newCanvas.loadFromJSON(selectedCanvas.json, () => newCanvas.renderAll());
     }
-
+  
     // Detect object selection changes
     newCanvas.on("selection:created", updateSelectedTextStyles);
     newCanvas.on("selection:updated", updateSelectedTextStyles);
-    
-    // Keyboard shortcuts
+  
+    //  Add event listener for Delete/Backspace key
     const handleKeyDown = (event) => {
       if (event.key === "Delete" || event.key === "Backspace") {
         const activeObject = newCanvas.getActiveObject();
@@ -52,23 +57,39 @@ const App = () => {
         }
       }
     };
-
+  
     document.addEventListener("keydown", handleKeyDown);
-
+  
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
       newCanvas.dispose();
       delete canvasRef.current[id];
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [selectedCanvas]);
-
-  // Save the canvas
+  
+  // Save the canvas and generate a thumbnail
   const saveCanvas = () => {
     if (!selectedCanvas) return;
     const { id } = selectedCanvas;
     const canvas = canvasRef.current[id];
+
+    // Convert canvas to JSON
     const json = canvas.toJSON();
-    setCanvases((prev) => prev.map((c) => (c.id === id ? { ...c, json } : c)));
+
+    // Get the original canvas size
+    const originalWidth = canvas.width;
+    const originalHeight = canvas.height;
+
+    // Generate a properly scaled thumbnail (keeping aspect ratio)
+    const thumbnail = canvas.toDataURL({
+      format: "png",
+      multiplier: 1, // Scale down to 20% of the original size
+    });
+
+    // Update the canvases list with the new thumbnail
+    setCanvases((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, json, thumbnail } : c))
+    );
   };
 
   // Load a saved canvas
@@ -107,7 +128,7 @@ const App = () => {
   const updateSelectedTextStyles = () => {
     const canvas = canvasRef.current[selectedCanvas?.id];
     if (!canvas) return;
-    
+
     const activeObject = canvas.getActiveObject();
     if (activeObject && activeObject.type === "textbox") {
       setTextColor(activeObject.fill || "#000000");
@@ -124,7 +145,7 @@ const App = () => {
     if (!selectedCanvas) return;
     const canvas = canvasRef.current[selectedCanvas.id];
     const activeObject = canvas.getActiveObject();
-    
+
     if (activeObject && activeObject.type === "textbox") {
       activeObject.set({ [property]: value });
       canvas.renderAll();
@@ -213,12 +234,29 @@ const App = () => {
         Underline
       </label>
 
-      <input type="file" accept="image/*" onChange={addImage} disabled={!selectedCanvas} />
+      <input
+        type="file"
+        accept="image/*"
+        onChange={addImage}
+        disabled={!selectedCanvas}
+      />
 
       <h3>Saved Canvases</h3>
       <ul>
         {canvases.map((c) => (
-          <li key={c.id}>
+          <li
+            key={c.id}
+            style={{ display: "flex", alignItems: "center", gap: "10px" }}
+          >
+            {c.thumbnail && (
+              <img
+                src={c.thumbnail}
+                alt="thumbnail"
+                width="350" // Increased width
+                height="250" // Increased height
+                style={{ border: "1px solid #ccc", borderRadius: "5px" }}
+              />
+            )}
             <button onClick={() => loadCanvas(c)}>{c.title}</button>
             <button onClick={() => deleteCanvas(c.id)}>Delete</button>
           </li>
