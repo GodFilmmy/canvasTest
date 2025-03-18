@@ -1,0 +1,124 @@
+import React, { useEffect, useRef, useState } from "react";
+import { fabric } from "fabric";
+
+const App = () => {
+  const [canvases, setCanvases] = useState([]);
+  const [selectedCanvas, setSelectedCanvas] = useState(null);
+  const canvasRef = useRef({});
+  const [textColor, setTextColor] = useState("#000000");
+  const [canvasTitle, setCanvasTitle] = useState("");
+  const [fontStyle, setFontStyle] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+  });
+
+  const createCanvas = () => {
+    if (!canvasTitle.trim()) {
+      return alert("Please enter a title");
+    }
+    const id = Date.now().toString();
+    const newCanvas = { id, title: canvasTitle, json: null, thumbnail: null };
+    setCanvases((prev) => [...prev, newCanvas]);
+    setSelectedCanvas(newCanvas);
+    setCanvasTitle("");
+  };
+
+  useEffect(() => {
+    if (!selectedCanvas) return;
+    const { id } = selectedCanvas;
+
+    const newCanvas = new fabric.Canvas(`canvas-${id}`, {
+      width: 800,
+      height: 500,
+      backgroundColor: "#FFFFFF",
+      selection: true,
+      preserveObjectStacking: true,
+    });
+
+    canvasRef.current[id] = newCanvas;
+    if (selectedCanvas.json) {
+      newCanvas.loadFromJSON(selectedCanvas.json, () => newCanvas.renderAll());
+    }
+
+    // Fix function name
+    newCanvas.on("selection:cleared", updateSelectedTextStyle);
+    newCanvas.on("selection:updated", updateSelectedTextStyle);
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const activeObject = newCanvas.getActiveObject();
+        if (activeObject && !activeObject.isEditing) {
+          newCanvas.remove(activeObject);
+          newCanvas.requestRenderAll();
+        }
+      }
+    };
+
+    // Fix event listener
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      newCanvas.dispose();
+      delete canvasRef.current[id];
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedCanvas]);
+
+  const saveCanvas = () => {
+    if (!selectedCanvas) return;
+    const { id } = selectedCanvas;
+    const canvas = canvasRef.current[id];
+    const json = canvas.toJSON();
+    const thumbnail = canvas.toDataURL({
+      format: "png",
+      multiplier: 0.5, // Fix small thumbnails
+    });
+    setCanvases((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, json, thumbnail } : c))
+    );
+  };
+
+  return (
+    <div>
+      <input
+        type="text"
+        placeholder="Enter title"
+        value={canvasTitle}
+        onChange={(e) => setCanvasTitle(e.target.value)}
+      />
+      <button onClick={createCanvas}>New Canvas</button>
+      <button onClick={saveCanvas} disabled={!selectedCanvas}>
+        Save Canvas
+      </button>
+
+      <h3>Saved Canvases</h3>
+      <ul>
+        {canvases.map((c) => (
+          <li key={c.id} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            {c.thumbnail && (
+              <img
+                src={c.thumbnail}
+                alt="thumbnail"
+                width="400" // Increase size
+                height="300"
+                style={{ border: "1px solid #ccc", borderRadius: "5px" }}
+              />
+            )}
+            <button onClick={() => setSelectedCanvas(c)}>{c.title}</button>
+            <button onClick={() => deleteCanvas(c.id)}>Delete</button>
+          </li>
+        ))}
+      </ul>
+
+      {selectedCanvas && (
+        <div>
+          <h3>Editing Canvas: {selectedCanvas.title}</h3>
+          <canvas id={`canvas-${selectedCanvas.id}`} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
